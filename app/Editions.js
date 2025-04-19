@@ -1,5 +1,5 @@
-import { useLocalSearchParams } from 'expo-router';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, Modal } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, Modal, ActivityIndicator } from 'react-native';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { useEffect, useState } from 'react';
 import { addBookToList } from '../utils/storage';
@@ -7,12 +7,14 @@ import CustomButton from '../components/CustomButton';
 
 export default function EditionsScreen() {
   const { book } = useLocalSearchParams();
+  const router = useRouter();
   const bookData = book ? JSON.parse(book) : null;
   const [editions, setEditions] = useState([]);
   const [filteredEditions, setFilteredEditions] = useState([]);
   const [hasFetched, setHasFetched] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedEdition, setSelectedEdition] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const [open, setOpen] = useState(false);
   const [languageFilter, setLanguageFilter] = useState(null);
@@ -27,17 +29,41 @@ export default function EditionsScreen() {
   const fetchAndFilter = async () => {
     if (!bookData?.id || !languageFilter) return;
     try {
+      setLoading(true);
       const response = await fetch(`https://openlibrary.org${bookData.id}/editions.json`);
       const data = await response.json();
       const allEditions = data.entries || [];
-      setEditions(allEditions);
-      const filtered = allEditions.filter((ed) =>
+
+      const enriched = await Promise.all(
+        allEditions.map(async (ed) => {
+          const isbn = ed.isbn_13?.[0] || ed.isbn_10?.[0];
+          if (!isbn) return ed;
+          try {
+            const googleRes = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
+            const googleData = await googleRes.json();
+            const volume = googleData.items?.[0]?.volumeInfo;
+            return {
+              ...ed,
+              googlePages: volume?.pageCount,
+              googleImage: volume?.imageLinks?.thumbnail,
+              googlePrintType: volume?.printType,
+            };
+          } catch {
+            return ed;
+          }
+        })
+      );
+
+      setEditions(enriched);
+      const filtered = enriched.filter((ed) =>
         ed.languages?.some(lang => lang.key.includes(languageFilter))
       );
       setFilteredEditions(filtered);
       setHasFetched(true);
     } catch (error) {
       console.error('Failed to fetch editions:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -45,13 +71,14 @@ export default function EditionsScreen() {
     const title = item.title || 'Untitled';
     const author = bookData?.author_name?.join(', ') || 'Unknown Author';
     const language = item.languages?.map(l => l.key.replace('/languages/', '')).join(', ') || 'Unknown';
-    const pages = item.number_of_pages || 'N/A';
-    const isbn = item.isbn_13?.[0] || 'N/A';
+    const pages = item.googlePages || item.number_of_pages || item.pagination || 'N/A';
+    const printType = item.googlePrintType || 'Unknown';
+    const isbn = item.isbn_13?.[0] || item.isbn_10?.[0] || 'N/A';
     const fallbackCover = bookData?.coverUrl || 'https://via.placeholder.com/100x150?text=No+Cover';
-    const cover = item.covers?.[0] ? `https://covers.openlibrary.org/b/id/${item.covers[0]}-M.jpg` : fallbackCover;
+    const cover = item.googleImage || (item.covers?.[0] ? `https://covers.openlibrary.org/b/id/${item.covers[0]}-M.jpg` : fallbackCover);
 
     return (
-      <View style={styles.card}>
+      <TouchableOpacity style={styles.card}>
         <Image source={{ uri: cover }} style={styles.cover} />
         <View style={styles.info}>
           <Text style={styles.title}>{title}</Text>
@@ -68,7 +95,7 @@ export default function EditionsScreen() {
             style={{ marginTop: 8 }}
           />
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -95,7 +122,9 @@ export default function EditionsScreen() {
         <Text style={styles.searchButtonText}>Search Editions</Text>
       </TouchableOpacity>
 
-      {hasFetched && (
+      {loading && <ActivityIndicator size="large" color="#5271ff" style={{ marginVertical: 20 }} />}
+
+      {hasFetched && !loading && (
         <FlatList
           data={filteredEditions}
           keyExtractor={(item, index) => item.key + index}
