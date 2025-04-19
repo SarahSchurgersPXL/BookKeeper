@@ -64,7 +64,7 @@ export default function TabLayout() {
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="search" size={24} color="#5271ff" style={{ marginRight: 8 }} />
               <Text style={{ fontWeight: 'bold', fontSize: 18, color: '#5271ff' }}>
-                Search
+                Search for Books
               </Text>
             </View>
           ),          
