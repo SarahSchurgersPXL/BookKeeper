@@ -100,7 +100,7 @@ export default function TabLayout() {
             color: '#ffffff',
           },
         }}
-      />
+      />      
     </Tabs>
   );
 }

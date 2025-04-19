@@ -5,8 +5,7 @@ export default function Home() {
   const navigation = useNavigation();
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text style={{ fontSize: 24, marginBottom: 20 }}>Welkom bij je Boekenlog!</Text>
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>      
       <Button
         title="To Read"
         onPress={() => navigation.navigate('lists/toread')}
